@@ -23,17 +23,128 @@
 #include<list>
 #include<random>
 
+using namespace std;
+
+__global__ void matrixAddv1(float *d_dataset, float *d_distance_mat, int no_of_data_records,int no_of_features){
+    int column = ( blockDim.x * blockIdx.x ) + threadIdx.x;
+    int row    = ( blockDim.y * blockIdx.y ) + threadIdx.y;
+    int tid    = ( blockDim.x * gridDim.x * row ) + column;
+
+    if (tid < no_of_data_records* no_of_data_records)
+    {
+        //printf("tid:%d row:%d col:%d \n", tid, row, column );
+
+          if (row==column){
+            d_distance_mat[tid]=10000;
+          }
+
+          else{
+            float distance = 0;
+
+              for(int k = 0; k < no_of_features ; k++) // compute the distance between the two instances
+              {
+                  float diff = d_dataset[row* no_of_features + k] - d_dataset[ column * no_of_features + k];
+                  distance += diff * diff;
+              }
+
+              distance = sqrt(distance);
+              d_distance_mat[tid]=distance;
+          }
+
+    }
+
+}
 
 int main(int argc, char* argv[])
 {
-    int matrixSize = 1024; // square matrix matrixSize * matrixSize
-    int numElements = matrixSize * matrixSize;
+
+
+
+    //user given K value
+    int K = 2;
+
+    printf("K:%lu \n", K);
+
+    int no_of_data_records = 8; // square matrix matrixSize * matrixSize
+    int no_of_features = 4;
+    int numElements = no_of_data_records * no_of_data_records;
+
+    // Allocate host memory
+    float *h_dataset = (float *)malloc(no_of_data_records* no_of_features * sizeof(float));
+    float *h_distance_mat = (float *)malloc(no_of_data_records* no_of_data_records * sizeof(float));
+    int *h_class = (int *)malloc(no_of_data_records * sizeof(int));
+
+
+    // Initialize the host input matrixs
+    for (int i = 0; i < no_of_data_records* no_of_features; ++i)
+    {
+        h_dataset[i] = rand()/(float)RAND_MAX;
+
+    }
+
+    h_class[0]=0,h_class[1]=1, h_class[2]=0, h_class[3]=0, h_class[4]=1, h_class[5]=1, h_class[6]=1, h_class[7]=0;
+    for (int i = 0; i < no_of_data_records; ++i)
+    {
+        for(int j=0;j<no_of_features;j++){
+          printf("%f ",h_dataset[ i*no_of_features + j ]);
+        }
+
+        printf(" : %lu \n", h_class[i] );
+    }
+
+
+    // Allocate the device input matrix A
+    float *d_distance_mat, *d_dataset;
+    int *d_class;
+
+    cudaMalloc(&d_dataset, no_of_data_records* no_of_features * sizeof(float));
+    cudaMalloc(&d_distance_mat, no_of_data_records* no_of_data_records * sizeof(float));
+    cudaMalloc(&d_class, no_of_data_records * sizeof(int));
+
+    // Copy the host input to the device input matrixs in
+    cudaMemcpy(d_dataset, h_dataset, no_of_data_records* no_of_features * sizeof(float), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_class, h_class, no_of_data_records * sizeof(int), cudaMemcpyHostToDevice);
+
+    int threadsPerBlockDim = 8;
+    int gridDimSize = (no_of_data_records + threadsPerBlockDim - 1) / threadsPerBlockDim;
+
+    dim3 blockSize(threadsPerBlockDim, threadsPerBlockDim);
+    dim3 gridSize (gridDimSize, gridDimSize);
+
+    printf("CUDA kernel launch with %dx%d blocks of %dx%d threads\n", gridDimSize, gridDimSize, threadsPerBlockDim, threadsPerBlockDim);
+
+    cudaEvent_t start, stop;
+    cudaEventCreate(&start);
+    cudaEventCreate(&stop);
+    float milliseconds = 0;
+
+    cudaEventRecord(start);
+
+    matrixAddv1<<<gridSize, blockSize>>>(d_dataset, d_distance_mat, no_of_data_records,no_of_features);
+
+    cudaMemcpy(h_distance_mat, d_distance_mat, no_of_data_records* no_of_data_records * sizeof(float), cudaMemcpyDeviceToHost);
+    cudaEventRecord(stop);
+    cudaEventSynchronize(stop);
+
+    cudaEventElapsedTime(&milliseconds, start, stop);
+    printf("GPU option 1 time to sum the matrixes %f ms\n", milliseconds);
+
+    for (int i = 0; i < no_of_data_records; ++i)
+    {
+        for(int j=0;j<no_of_data_records;j++){
+          printf("%f ",h_distance_mat[ i*no_of_data_records + j ]);
+        }
+
+        printf(" \n" );
+    }
 
     printf("done\n" );
 
 
     return 0;
 }
+
+
 /***
 // Allocate host memory
 float *h_A = (float *)malloc(numElements * sizeof(float));
