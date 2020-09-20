@@ -55,7 +55,7 @@ float computeAccuracy(int* confusionMatrix, ArffData* dataset)
     return successfulPredictions / (float) dataset->num_instances();
 }
 
-__global__ void matrixAddv1(float *d_dataset, float *d_distance_mat, int no_of_data_records,int no_of_features){
+__global__ void calc_distance_matrix(float *d_dataset, float *d_distance_mat, int no_of_data_records,int no_of_features){
     int column = ( blockDim.x * blockIdx.x ) + threadIdx.x;
     int row    = ( blockDim.y * blockIdx.y ) + threadIdx.y;
     int tid    =  row * no_of_data_records + column; //( blockDim.x * gridDim.x * row ) + column;
@@ -102,60 +102,82 @@ __global__ void calc_predictions(float *d_distance_mat, int no_of_data_records,i
 
 }
 */
-int get_mode(int* class_array, int class_array_size) {
 
-    int* ipRepetition = new int[class_array_size];
-    for (int i = 0; i < class_array_size; ++i) {
-        ipRepetition[i] = 0;
-        int j = 0;
-        bool bFound = false;
-        while ((j < i) && (class_array[i] != class_array[j])) {
-            if (class_array[i] != class_array[j]) {
-                ++j;
-            }
-        }
-        ++(ipRepetition[j]);
-    }
-    int index_max_repeated = 0;
-    for (int i = 1; i < class_array_size; ++i) {
-        if (ipRepetition[i] > ipRepetition[index_max_repeated]) {
-            index_max_repeated = i;
-        }
-    }
-    delete [] ipRepetition;
-    return class_array[index_max_repeated];
+int get_mode(int* class_array, int class_array_size) {
+  int* ipRepetition = new int[class_array_size];
+  for (int i = 0; i < class_array_size; ++i) {
+      ipRepetition[i] = 0;
+      int j = 0;
+      bool bFound = false;
+      while ((j < i) && (class_array[i] != class_array[j])) {
+          if (class_array[i] != class_array[j]) {
+              ++j;
+          }
+      }
+      ++(ipRepetition[j]);
+  }
+  int index_max_repeated = 0;
+  for (int i = 1; i < class_array_size; ++i) {
+      if (ipRepetition[i] > ipRepetition[index_max_repeated]) {
+          index_max_repeated = i;
+      }
+  }
+  delete [] ipRepetition;
+  return class_array[index_max_repeated];
+
 
 }
 
-int find_class(float* distances_temp, ArffData* dataset,  int K ){
+int find_smallest_distance_index(float *distances, int no_of_data_records){
+  int smallest_index= 0 ;
+  for(int i=1; i< no_of_data_records; i++){
+      if( distances[i] < distances[smallest_index]){
+        smallest_index = i ;
+      }
+  }
+  return smallest_index;
+}
+
+
+
+int find_class(float* distances, ArffData* dataset,  int K ){
   int no_of_data_records = dataset->num_instances();
   //std::cout << "no_of_data_records: " << no_of_data_records <<" \n";
 
-  vector<float> distances(distances_temp, distances_temp + no_of_data_records);
+  int* predictions = (int*)malloc(K * sizeof(int));
+  for (int k_idx=0; k_idx <K; k_idx ++){
+      int index = find_smallest_distance_index(distances, no_of_data_records);//indexofSmallestElement(distances, dataset->num_instances());
+      distances[index]=999999;
+      predictions[k_idx]= dataset->get_instance(index)->get(dataset->num_attributes() - 1)->operator int32();
+  }
 
-
-
-    int predicted_class = 0;//get_mode(predictions, K) ; // or get_mode(predictions, K) or getMode2(predictions, K)
-
+    int predicted_class = get_mode(predictions, K) ; // or get_mode(predictions, K) or getMode2(predictions, K)
     return predicted_class;
 }
+
+
 
 int main(int argc, char* argv[])
 {
 
+  if(argc != 3)
+  {
+      cout << "Usage: ./main datasets/datasetFile.arff K" << endl;
 
-
-
+      exit(0);
+  }
   // Open the dataset
   ArffParser parser(argv[1]);
   ArffData *dataset = parser.parse();
+  int K = atoi(argv[2]);
 
-    int K=1;
-    printf("K:%lu \n", K);
 
-    int no_of_data_records = 9; // square matrix matrixSize * matrixSize
-    int no_of_features = 4;
-    int numElements = no_of_data_records * no_of_data_records;
+
+
+
+    int no_of_data_records = dataset->num_instances(); // square matrix matrixSize * matrixSize
+    int no_of_features = dataset->num_attributes()-1;
+    printf("K:%lu no_of_data_records:%d no_of_features:%d\n", K, no_of_data_records, no_of_features);
 
     // Allocate host memory
     float *h_dataset = (float *)malloc(no_of_data_records* no_of_features * sizeof(float));
@@ -164,20 +186,17 @@ int main(int argc, char* argv[])
 
 
     // Initialize the host input matrixs
-    for (int i = 0; i < no_of_data_records* no_of_features; ++i)
-    {
-        h_dataset[i] = rand()/(float)RAND_MAX;
-
+    for(int row=0; row < no_of_data_records; row++){
+      for( int col=0; col< no_of_features; col++){
+        h_dataset[ (row* no_of_features) + col] = dataset->get_instance(row)->get(col)->operator float();
+      }
+      h_class[row] = dataset->get_instance(row)->get(dataset->num_attributes() - 1)->operator int32();
     }
 
-    h_class[0]=0,h_class[1]=1, h_class[2]=0, h_class[3]=0, h_class[4]=1, h_class[5]=1, h_class[6]=1, h_class[7]=0, h_class[8]=0;
     for (int i = 0; i < no_of_data_records; ++i)
     {
-        for(int j=0;j<no_of_features;j++){
-          printf("%f ",h_dataset[ i*no_of_features + j ]);
-        }
+        printf("%d ", h_class[i]);
 
-        printf(" : %lu \n", h_class[i] );
     }
 
 
@@ -195,7 +214,7 @@ int main(int argc, char* argv[])
     cudaMemcpy(d_class, h_class, no_of_data_records * sizeof(int), cudaMemcpyHostToDevice);
 
     {
-    int threadsPerBlockDim = 8;
+    int threadsPerBlockDim = 32;
     int gridDimSize = (no_of_data_records + threadsPerBlockDim - 1) / threadsPerBlockDim;
 
     dim3 blockSize(threadsPerBlockDim, threadsPerBlockDim);
@@ -210,7 +229,7 @@ int main(int argc, char* argv[])
 
     cudaEventRecord(start);
 
-    matrixAddv1<<<gridSize, blockSize>>>(d_dataset, d_distance_mat, no_of_data_records,no_of_features);
+    calc_distance_matrix<<<gridSize, blockSize>>>(d_dataset, d_distance_mat, no_of_data_records,no_of_features);
 
     cudaMemcpy(h_distance_mat, d_distance_mat, no_of_data_records* no_of_data_records * sizeof(float), cudaMemcpyDeviceToHost);
     cudaEventRecord(stop);
@@ -219,16 +238,10 @@ int main(int argc, char* argv[])
     cudaEventElapsedTime(&milliseconds, start, stop);
     printf("GPU option 1 time to sum the matrixes %f ms\n", milliseconds);
 
-    for (int i = 0; i < no_of_data_records; ++i)
-    {
-        for(int j=0;j<no_of_data_records;j++){
-          printf("%f ",h_distance_mat[ i*no_of_data_records + j ]);
-        }
 
-        printf(" \n" );
-    }
 
     }//end of matrix calculate
+
 
     /*
     printf("second \n");
