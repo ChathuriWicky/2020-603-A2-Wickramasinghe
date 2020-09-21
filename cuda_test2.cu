@@ -78,6 +78,7 @@ __global__ void calc_distance_matrix(float *d_dataset, float *d_distance_mat, in
 
               distance = sqrt(distance);
               d_distance_mat[tid]=distance;
+              //printf("tid: %d  %f\n", tid, distance);
           }
     }
 
@@ -149,9 +150,11 @@ int find_class(float* distances, ArffData* dataset,  int K ){
       int index = find_smallest_distance_index(distances, no_of_data_records);//indexofSmallestElement(distances, dataset->num_instances());
       distances[index]=999999;
       predictions[k_idx]= dataset->get_instance(index)->get(dataset->num_attributes() - 1)->operator int32();
+      //printf("index %lu, ", index);
   }
-
+  //printf("k predictions calculated \n");
     int predicted_class = get_mode(predictions, K) ; // or get_mode(predictions, K) or getMode2(predictions, K)
+      //printf("mode calculated predicted class%lu\n", predicted_class);
     return predicted_class;
 }
 
@@ -193,11 +196,8 @@ int main(int argc, char* argv[])
       h_class[row] = dataset->get_instance(row)->get(dataset->num_attributes() - 1)->operator int32();
     }
 
-    for (int i = 0; i < no_of_data_records; ++i)
-    {
-        printf("%d ", h_class[i]);
 
-    }
+
 
 
     // Allocate the device input matrix A
@@ -213,7 +213,7 @@ int main(int argc, char* argv[])
     cudaMemcpy(d_dataset, h_dataset, no_of_data_records* no_of_features * sizeof(float), cudaMemcpyHostToDevice);
     cudaMemcpy(d_class, h_class, no_of_data_records * sizeof(int), cudaMemcpyHostToDevice);
 
-    {
+
     int threadsPerBlockDim = 32;
     int gridDimSize = (no_of_data_records + threadsPerBlockDim - 1) / threadsPerBlockDim;
 
@@ -237,11 +237,46 @@ int main(int argc, char* argv[])
 
     cudaEventElapsedTime(&milliseconds, start, stop);
     printf("GPU option 1 time to sum the matrixes %f ms\n", milliseconds);
+    //end of matrix calculate
+    /*
+    for (int i = 0; i < no_of_data_records; ++i)
+    {
+        for(int j=0;j<no_of_data_records;j++){
+          printf("%f ",h_distance_mat[ i*no_of_data_records + j ]);
+        }
+
+        printf(" \n");
+    }
+    */
+
+    struct timespec start_cpu, end_cpu;
+    clock_gettime(CLOCK_MONOTONIC_RAW, &start_cpu);
+
+    int* predictions = (int*)malloc(dataset->num_instances() * sizeof(int));
+
+    for (int i = 0; i < no_of_data_records; ++i)
+    {
+        float *distances_temp= (float *)malloc(no_of_data_records * sizeof(float));
+        //get the distance matrix
+        for(int j=0;j<no_of_data_records;j++){
+          distances_temp[j] = h_distance_mat[ i*no_of_data_records + j ];
+          //printf("%f ,", distances_temp[j] );
+        }
+
+        predictions[i]= find_class(distances_temp, dataset, K);
+        //printf("%lu ,", predictions[i] );
+    }
 
 
+    int* confusionMatrix = computeConfusionMatrix(predictions, dataset);
+    // Calculate the accuracy
+    float accuracy = computeAccuracy(confusionMatrix, dataset);
 
-    }//end of matrix calculate
+    clock_gettime(CLOCK_MONOTONIC_RAW, &end_cpu);
+    uint64_t diff = (1000000000L * (end_cpu.tv_sec - start_cpu.tv_sec) + end_cpu.tv_nsec - start_cpu.tv_nsec) / 1e6;
 
+    printf("\n The KNN with K=%lu classifier for %lu instances required %llu ms CPU time, accuracy was %.4f\n", K, dataset->num_instances(), (long long unsigned int) diff, accuracy);
+    printf("Total runtime: %0.4f", milliseconds+diff);
 
     /*
     printf("second \n");
