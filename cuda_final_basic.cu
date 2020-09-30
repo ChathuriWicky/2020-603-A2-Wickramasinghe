@@ -60,7 +60,7 @@ __global__ void calc_distance_matrix(float *d_dataset, float *d_distance_mat, in
     int row    = ( blockDim.y * blockIdx.y ) + threadIdx.y;
     int tid    =  row * no_of_data_records + column; //( blockDim.x * gridDim.x * row ) + column;
 
-    if ( row < no_of_data_records && column < no_of_data_records )
+    if ( row < no_of_data_records && column < no_of_data_records && column >= row)
     {
 
           if (row==column){
@@ -78,12 +78,61 @@ __global__ void calc_distance_matrix(float *d_dataset, float *d_distance_mat, in
 
               distance = sqrt(distance);
               d_distance_mat[tid]=distance;
+              d_distance_mat[column * no_of_data_records + row]= distance;
               //printf("tid: %d  %f\n", tid, distance);
           }
     }
 
 }
 
+/*
+if ( row < no_of_data_records && column < no_of_data_records && column >= row)
+{
+
+      if (row==column){
+        d_distance_mat[tid]=10000;
+      }
+
+      else{
+        float distance = 0;
+
+          for(int k = 0; k < no_of_features ; k++) // compute the distance between the two instances
+          {
+              float diff = d_dataset[row* no_of_features + k] - d_dataset[ column * no_of_features + k];
+              distance += diff * diff;
+          }
+
+          distance = sqrt(distance);
+          d_distance_mat[tid]=distance;
+          d_distance_mat[column * no_of_data_records + row]= distance;
+          //printf("tid: %d  %f\n", tid, distance);
+      }
+}
+
+OR
+
+if ( row < no_of_data_records && column < no_of_data_records )
+{
+
+      if (row==column){
+        d_distance_mat[tid]=10000;
+      }
+
+      else{
+        float distance = 0;
+
+          for(int k = 0; k < no_of_features ; k++) // compute the distance between the two instances
+          {
+              float diff = d_dataset[row* no_of_features + k] - d_dataset[ column * no_of_features + k];
+              distance += diff * diff;
+          }
+
+          distance = sqrt(distance);
+          d_distance_mat[tid]=distance;
+          //printf("tid: %d  %f\n", tid, distance);
+      }
+}
+*/
 
 
 int get_mode(int* class_array, int class_array_size) {

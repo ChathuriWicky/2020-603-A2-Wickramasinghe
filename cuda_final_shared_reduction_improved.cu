@@ -60,7 +60,7 @@ __global__ void calc_distance_matrix(float *d_dataset, float *d_distance_mat, in
     int row    = ( blockDim.y * blockIdx.y ) + threadIdx.y;
     int tid    =  row * no_of_data_records + column; //( blockDim.x * gridDim.x * row ) + column;
 
-    if ( row < no_of_data_records && column < no_of_data_records )
+    if ( row < no_of_data_records && column < no_of_data_records && column >= row)
     {
 
           if (row==column){
@@ -78,6 +78,7 @@ __global__ void calc_distance_matrix(float *d_dataset, float *d_distance_mat, in
 
               distance = sqrt(distance);
               d_distance_mat[tid]=distance;
+              d_distance_mat[column * no_of_data_records + row]= distance;
               //printf("tid: %d  %f\n", tid, distance);
           }
     }
