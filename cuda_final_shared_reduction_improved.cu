@@ -343,7 +343,7 @@ int main(int argc, char* argv[])
     cudaEventSynchronize(stop);
 
     cudaEventElapsedTime(&milliseconds, start, stop);
-    printf("GPU section takes only to calculate distance matrix %f ms\n", milliseconds);
+    printf("Time GPU section takes only to calculate distance matrix %f ms\n", milliseconds);
 
 
     struct timespec start_cpu, end_cpu;
