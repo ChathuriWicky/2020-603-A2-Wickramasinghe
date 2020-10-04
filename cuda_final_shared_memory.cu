@@ -93,7 +93,7 @@ __global__ void finding_class_shared(float *d_distance_mat, int *d_class, int no
       sharedMemory[threadIdx.x] = (tid < no_of_data_records) ? d_distance_mat[i * no_of_data_records + tid] : 10000;
       sharedMemory_class[threadIdx.x] = (tid < no_of_data_records) ? d_class[tid] : 0;
       __syncthreads();
-
+      //ODD EVEN sort
 
       for (int s = 0 ; s < blockDim.x; s++)
     	{
@@ -337,9 +337,6 @@ int main(int argc, char* argv[])
       cudaEventRecord(stop);
       cudaEventSynchronize(stop);
 
-      //cudaEventElapsedTime(&milliseconds, start, stop);
-      //total_time += milliseconds;
-
 
     }
     cudaMemcpy(predictions, d_predictions, no_of_data_records*  sizeof(int), cudaMemcpyDeviceToHost);
@@ -356,7 +353,7 @@ int main(int argc, char* argv[])
 
 
     printf("\n The KNN with K=%lu classifier for %lu instances, accuracy was %.4f\n", K, dataset->num_instances(), accuracy);
-    printf("Total runtime: %0.4f", milliseconds+diff);
+    printf("Total runtime is: %0.4f", milliseconds+diff);
 
 
 

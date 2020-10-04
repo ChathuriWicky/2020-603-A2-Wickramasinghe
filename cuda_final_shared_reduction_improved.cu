@@ -384,7 +384,7 @@ int main(int argc, char* argv[])
 
 
     printf("\n The KNN with K=%lu classifier for %lu instances, accuracy was %.4f\n", K, dataset->num_instances(), accuracy);
-    printf("Total runtime: %0.4f", milliseconds+diff);
+    printf("Total runtime is: %0.4f", milliseconds+diff);
 
 
 
