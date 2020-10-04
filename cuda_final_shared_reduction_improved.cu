@@ -86,22 +86,22 @@ __global__ void calc_distance_matrix(float *d_dataset, float *d_distance_mat, in
 }
 
 __global__ void finding_class_shared(float *d_distance_mat, int *d_class, int no_of_data_records, int i, int K, float *temp_array1, int *temp_array2, int *d_predictions, int noOfBlocks, int *K_class_array){
-      __shared__ float sharedMemory[256];
-      __shared__ int sharedMemory_class[256];
-      int val = 128;
+      __shared__ float sharedMemory[1024];
+      __shared__ int sharedMemory_class[1024];
+      int val = 512;
 
       int tid = blockIdx.x*blockDim.x + threadIdx.x;
       sharedMemory[threadIdx.x] = (tid < no_of_data_records) ? d_distance_mat[i * no_of_data_records + tid] : 10000;
       sharedMemory_class[threadIdx.x] = (tid < no_of_data_records) ? d_class[tid] : 0;
       __syncthreads();
 
-      if (threadIdx.x %64 ==0 ){
+      if (threadIdx.x %256 ==0 ){
           //printf("threadIdx %d ", threadIdx.x );
           float K_ele[10];
           int K_class[10];
           for (int k=0; k< K; k++){
             int min_idx = threadIdx.x ;
-              for(int idx= threadIdx.x ; idx < (threadIdx.x ) + 64; idx ++)
+              for(int idx= threadIdx.x ; idx < (threadIdx.x ) + 256; idx ++)
               {
                 if(sharedMemory[idx] < sharedMemory[min_idx]){
                   min_idx = idx;
@@ -122,21 +122,21 @@ __global__ void finding_class_shared(float *d_distance_mat, int *d_class, int no
       }
         __syncthreads();
 
-      for (int s = blockDim.x/128; s > 0; s >>= 1)
+      for (int s = blockDim.x/512; s > 0; s >>= 1)
     	{
       		if (threadIdx.x < s ){
 
               float K_ele[10];
               int K_class[10];
               for (int k=0; k< K; k++){
-                  int min_idx = threadIdx.x * 128;
-                  for(int idx= threadIdx.x * 128; idx < (threadIdx.x * 128) + K; idx ++)
+                  int min_idx = threadIdx.x * 512;
+                  for(int idx= threadIdx.x * 512; idx < (threadIdx.x * 512) + K; idx ++)
                   {
                     if(sharedMemory[idx] < sharedMemory[min_idx]){
                       min_idx = idx;
                     }
                   }
-                  for(int idx= (threadIdx.x * 128)+ (val/s); idx < ((threadIdx.x * 128)+ (val/s)) + K; idx ++)
+                  for(int idx= (threadIdx.x * 512)+ (val/s); idx < ((threadIdx.x * 512)+ (val/s)) + K; idx ++)
                   {
                     if(sharedMemory[idx] < sharedMemory[min_idx]){
                       min_idx = idx;
@@ -147,9 +147,9 @@ __global__ void finding_class_shared(float *d_distance_mat, int *d_class, int no
                   sharedMemory[min_idx] = 100000;
               }
               for (int k=0; k< K; k++){
-                sharedMemory[(threadIdx.x * 128)+k]= K_ele[k];
+                sharedMemory[(threadIdx.x * 512)+k]= K_ele[k];
                 //printf("%f ", sharedMemory[(threadIdx.x * 128)+k]);
-                sharedMemory_class[(threadIdx.x * 128 )+k] = K_class[k];
+                sharedMemory_class[(threadIdx.x * 512 )+k] = K_class[k];
               }
 
           }
@@ -350,7 +350,7 @@ int main(int argc, char* argv[])
     clock_gettime(CLOCK_MONOTONIC_RAW, &start_cpu);
 
 
-    int threadsPerBlock = 256;
+    int threadsPerBlock = 1024;
     int blocksPerGrid = (no_of_data_records + threadsPerBlock - 1) / threadsPerBlock;
 
     float* temp_array1; //for k distances
